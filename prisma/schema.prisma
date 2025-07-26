@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique // "ADMIN", "USER"
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  users UserRole[]
+
+  @@map("roles")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  username      String    @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  personalID    String?   @unique
+  phoneNumber   String?
+  profileImage  String? // URL to profile image in GCloud/S3
+  isActive      Boolean   @default(true)
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+
+  // Relations
+  roles        UserRole[]
+  testAttempts TestAttempt[]
+
+  @@map("users")
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model TestTemplate {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  sections      Section[]
+  scheduledTest ScheduledTest[]
+
+  @@map("test_templates")
+}
+
+model Section {
+  id      String      @id @default(cuid())
+  type    SectionType
+  content Json
+
+  answers Json
+
+  testTemplateId String
+  testTemplate   TestTemplate @relation(fields: [testTemplateId], references: [id], onDelete: Cascade)
+
+  @@map("sections")
+}
+
+model ScheduledTest {
+  id        String   @id @default(cuid())
+  startTime DateTime // When the test becomes available
+  endTime   DateTime // When the test is no longer available
+  isActive  Boolean  @default(true)
+
+  // Relations
+  testTemplateId String
+  testTemplate   TestTemplate  @relation(fields: [testTemplateId], references: [id])
+  attempts       TestAttempt[]
+
+  @@map("scheduled_tests")
+}
+
+model TestAttempt {
+  id          String        @id @default(cuid())
+  status      AttemptStatus @default(IN_PROGRESS)
+  startedAt   DateTime      @default(now())
+  completedAt DateTime?
+
+  userAnswers Json?
+
+  results Json?
+
+  // Relations
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledTestId String
+  scheduledTest   ScheduledTest @relation(fields: [scheduledTestId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scheduledTestId]) //user can only attempt a scheduled test once.
+  @@map("test_attempts")
+}
+
+enum SectionType {
+  LISTENING
+  READING
+  WRITING
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  COMPLETED
+  GRADED // For when writing is manually graded later
+}
