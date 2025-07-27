@@ -7,6 +7,17 @@ const testUser = require("./src/routes/user/testUser");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.get("/", (req, res) => {
+  res.json({
+    message: "Server is running!",
+    status: "OK",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get("/health", (req, res) => {
+  res.json({ status: "healthy" });
+});
 
 // MIDDLEWARE
 app.use(cors());
