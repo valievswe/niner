@@ -146,4 +146,76 @@ router.delete(
   }
 );
 
+router.get("/attempts", [verifyToken, isAdmin], async (req, res) => {
+  try {
+    const attempts = await prisma.testAttempt.findMany({
+      where: {
+        status: "COMPLETED", // Only show finished tests
+      },
+      orderBy: {
+        completedAt: "desc",
+      },
+      include: {
+        // Include info about the user who took the test
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+            phoneNumber: true,
+          },
+        },
+        // Include info about which test was taken
+        scheduledTest: {
+          include: {
+            testTemplate: {
+              select: { title: true },
+            },
+          },
+        },
+      },
+    });
+    res.json(attempts);
+  } catch (error) {
+    res.status(500).json({ error: "Could not fetch test attempts." });
+  }
+});
+
+/**
+ * @route   GET /api/admin/attempts/:id
+ * @desc    Get the full details for a single test attempt for grading/review
+ * @access  Private (Admin)
+ */
+router.get("/attempts/:id", [verifyToken, isAdmin], async (req, res) => {
+  const { id } = req.params;
+  try {
+    const attempt = await prisma.testAttempt.findUnique({
+      where: { id: id },
+      include: {
+        user: {
+          select: { firstName: true, lastName: true },
+        },
+        scheduledTest: {
+          include: {
+            testTemplate: {
+              include: {
+                // Get the sections to access BOTH content and correct answers
+                sections: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!attempt) {
+      return res.status(404).json({ error: "Test attempt not found." });
+    }
+
+    res.json(attempt);
+  } catch (error) {
+    res.status(500).json({ error: "Could not fetch attempt details." });
+  }
+});
+
 module.exports = router;
