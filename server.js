@@ -13,6 +13,7 @@ app.get("/", (req, res) => {
     status: "OK",
     timestamp: new Date().toISOString(),
   });
+  console.log("received");
 });
 
 app.get("/health", (req, res) => {

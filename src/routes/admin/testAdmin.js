@@ -194,10 +194,7 @@ router.delete("/templates/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
-    // A transaction ensures that both delete operations succeed or both fail.
-    // This prevents a partial deletion if something goes wrong.
     await prisma.$transaction(async (tx) => {
-      // 1. First, delete all child ScheduledTest records linked to this template.
       await tx.scheduledTest.deleteMany({
         where: {
           testTemplateId: id,

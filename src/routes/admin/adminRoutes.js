@@ -218,4 +218,24 @@ router.get("/attempts/:id", [verifyToken, isAdmin], async (req, res) => {
   }
 });
 
+router.get("/stats", [verifyToken, isAdmin], async (req, res) => {
+  try {
+    const totalUsers = await prisma.user.count();
+    const totalTestTemplates = await prisma.testTemplate.count();
+    const countTotalCompletedTests = await prisma.testAttempt.count({
+      where: {
+        status: "COMPLETED",
+      },
+    });
+    const totalTestAttempts = await prisma.testAttempt.count();
+    res.json({
+      totalUsers,
+      totalTestTemplates,
+      countTotalCompletedTests,
+      totalTestAttempts,
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Could not fetch stats." });
+  }
+});
 module.exports = router;
