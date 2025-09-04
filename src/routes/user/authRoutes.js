@@ -3,11 +3,11 @@ const express = require("express");
 const router = express.Router();
 const prisma = require("../../db/index"); // Import the Prisma client instance
 const bcrypt = require("bcryptjs"); // For hashing passwords
-
+const { validatePasswordMiddleware } = require("../../middleware/validate");
 const jwt = require("jsonwebtoken");
 
 // User Registration Route
-router.post("/register", async (req, res) => {
+router.post("/register", validatePasswordMiddleware, async (req, res) => {
   const {
     email,
     username,

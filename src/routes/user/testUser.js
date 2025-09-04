@@ -137,6 +137,42 @@ router.post("/attempts/:attemptId/submit-section", async (req, res) => {
 });
 
 /**
+ * @route   POST /api/tests/attempts/:attemptId/submit
+ * @desc    Submit the entire test's answers in one go from the test room.
+ */
+router.post("/attempts/:attemptId/submit", async (req, res) => {
+  const { attemptId } = req.params;
+  const userId = req.user.userId;
+  const allAnswers = req.body; // This will be the full userAnswers object
+
+  try {
+    // Security: Find the attempt and ensure it belongs to the logged-in user
+    const attempt = await prisma.testAttempt.findFirst({
+      where: { id: attemptId, userId: userId },
+    });
+
+    if (!attempt) {
+      return res
+        .status(404)
+        .json({ error: "Attempt not found or permission denied." });
+    }
+
+    // Update the attempt with the complete set of answers
+    await prisma.testAttempt.update({
+      where: { id: attemptId },
+      data: {
+        userAnswers: allAnswers, // Save the entire JSON object
+      },
+    });
+
+    res.status(200).json({ message: "Test answers submitted successfully." });
+  } catch (error) {
+    console.error("Failed to submit test answers:", error);
+    res.status(500).json({ error: "Could not submit answers." });
+  }
+});
+
+/**
  * @route   POST /api/tests/attempts/:attemptId/finish
  * @desc    Finalize the test after all sections are complete, perform grading, and mark as completed.
  */
@@ -203,6 +239,51 @@ router.post("/attempts/:attemptId/finish", async (req, res) => {
   } catch (error) {
     console.error("Failed to finalize test:", error);
     res.status(500).json({ error: "Could not finalize test." });
+  }
+});
+
+/**
+ * @route   GET /api/tests/attempts/:attemptId
+ * @desc    Get full details for a single completed test attempt
+ * @access  Private (User who took the test)
+ */
+router.get("/attempts/:attemptId", async (req, res) => {
+  const { attemptId } = req.params;
+  const userId = req.user.userId;
+
+  try {
+    const attempt = await prisma.testAttempt.findFirst({
+      where: {
+        id: attemptId,
+        userId: userId, // SECURITY: Ensures users can only see their own attempts
+      },
+      include: {
+        user: {
+          select: { firstName: true, lastName: true },
+        },
+        scheduledTest: {
+          include: {
+            testTemplate: {
+              include: {
+                // This is the key part: include all sections and their content
+                sections: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!attempt) {
+      return res
+        .status(404)
+        .json({ error: "Attempt not found or you do not have permission." });
+    }
+
+    res.json(attempt);
+  } catch (error) {
+    console.error("Failed to fetch attempt details:", error);
+    res.status(500).json({ error: "Could not fetch attempt details." });
   }
 });
 
