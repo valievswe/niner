@@ -177,30 +177,21 @@ router.post("/attempts/:attemptId/submit", async (req, res) => {
  * @desc    Finalize the test by grading all SAVED answers and marking as completed.
  */
 router.post("/attempts/:attemptId/finish", async (req, res) => {
-  // Add this console.log for debugging
-  console.log(
-    `--- Received request to FINISH attemptId: ${req.params.attemptId} ---`
-  );
-
   const { attemptId } = req.params;
 
   try {
-    // This route no longer accepts a body. It only grades what's in the database.
+    // We will re-fetch the attempt to ensure we have the absolute latest userAnswers
     const attempt = await prisma.testAttempt.findUnique({
       where: { id: attemptId },
       include: {
         scheduledTest: {
           include: { testTemplate: { include: { sections: true } } },
         },
-        user: true,
       },
     });
 
-    if (!attempt || !attempt.userId) {
-      // Added a check for userId to be safe
-      return res
-        .status(404)
-        .json({ error: "Attempt not found or permission denied." });
+    if (!attempt) {
+      return res.status(404).json({ error: "Attempt not found." });
     }
 
     const userAnswers = attempt.userAnswers || {};
@@ -209,7 +200,9 @@ router.post("/attempts/:attemptId/finish", async (req, res) => {
       answerKey[sec.type] = sec.answers;
     });
 
-    // --- Grading Logic (This is correct) ---
+    // ====================================================================
+    //  THE FIX: IMPLEMENT THE ACTUAL GRADING LOGIC
+    // ====================================================================
     let listeningScore = 0;
     const listeningUserAns = userAnswers.LISTENING || {};
     const listeningCorrectAns = answerKey.LISTENING || {};
@@ -223,7 +216,9 @@ router.post("/attempts/:attemptId/finish", async (req, res) => {
           : "";
         if (sortedCorrect === sortedUser) listeningScore++;
       } else {
-        if (user === correct) listeningScore++;
+        // Case-insensitive comparison for text answers
+        if (String(user).toLowerCase() === String(correct).toLowerCase())
+          listeningScore++;
       }
     }
 
@@ -240,11 +235,13 @@ router.post("/attempts/:attemptId/finish", async (req, res) => {
           : "";
         if (sortedCorrect === sortedUser) readingScore++;
       } else {
-        if (user === correct) readingScore++;
+        // Case-insensitive comparison for text answers
+        if (String(user).toLowerCase() === String(correct).toLowerCase())
+          readingScore++;
       }
     }
+    // ====================================================================
 
-    // --- Update the database with final status ---
     const finalResults = { listeningScore, readingScore };
     await prisma.testAttempt.update({
       where: { id: attemptId },
@@ -255,7 +252,6 @@ router.post("/attempts/:attemptId/finish", async (req, res) => {
       },
     });
 
-    console.log(`--- Successfully FINISHED attemptId: ${attemptId} ---`);
     res.status(200).json({
       message: "Test completed and graded successfully!",
       finalResults,
@@ -265,7 +261,6 @@ router.post("/attempts/:attemptId/finish", async (req, res) => {
     res.status(500).json({ error: "Could not finalize test." });
   }
 });
-
 /**
  * @route   GET /api/tests/attempts/:attemptId
  * @desc    Get full details for a single completed test attempt
