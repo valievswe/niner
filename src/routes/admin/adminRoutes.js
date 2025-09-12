@@ -181,11 +181,6 @@ router.get("/attempts", [verifyToken, isAdmin], async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/admin/attempts/:id
- * @desc    Get the full details for a single test attempt for grading/review
- * @access  Private (Admin)
- */
 router.get("/attempts/:id", [verifyToken, isAdmin], async (req, res) => {
   const { id } = req.params;
   try {

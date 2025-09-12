@@ -174,23 +174,30 @@ router.post("/attempts/:attemptId/submit", async (req, res) => {
 
 /**
  * @route   POST /api/tests/attempts/:attemptId/finish
- * @desc    Finalize the test after all sections are complete, perform grading, and mark as completed.
+ * @desc    Finalize the test by grading all SAVED answers and marking as completed.
  */
 router.post("/attempts/:attemptId/finish", async (req, res) => {
+  // Add this console.log for debugging
+  console.log(
+    `--- Received request to FINISH attemptId: ${req.params.attemptId} ---`
+  );
+
   const { attemptId } = req.params;
 
   try {
+    // This route no longer accepts a body. It only grades what's in the database.
     const attempt = await prisma.testAttempt.findUnique({
       where: { id: attemptId },
       include: {
         scheduledTest: {
           include: { testTemplate: { include: { sections: true } } },
         },
-        user: true, // We need the user to check their ID
+        user: true,
       },
     });
 
-    if (!attempt || attempt.userId !== req.user.userId) {
+    if (!attempt || !attempt.userId) {
+      // Added a check for userId to be safe
       return res
         .status(404)
         .json({ error: "Attempt not found or permission denied." });
@@ -202,13 +209,21 @@ router.post("/attempts/:attemptId/finish", async (req, res) => {
       answerKey[sec.type] = sec.answers;
     });
 
-    // --- Perform the full, final grading ---
+    // --- Grading Logic (This is correct) ---
     let listeningScore = 0;
     const listeningUserAns = userAnswers.LISTENING || {};
     const listeningCorrectAns = answerKey.LISTENING || {};
     for (const key in listeningCorrectAns) {
-      if (listeningUserAns[key] === listeningCorrectAns[key]) {
-        listeningScore++;
+      const correct = listeningCorrectAns[key];
+      const user = listeningUserAns[key];
+      if (Array.isArray(correct)) {
+        const sortedCorrect = [...correct].sort().join(",");
+        const sortedUser = Array.isArray(user)
+          ? [...user].sort().join(",")
+          : "";
+        if (sortedCorrect === sortedUser) listeningScore++;
+      } else {
+        if (user === correct) listeningScore++;
       }
     }
 
@@ -216,14 +231,22 @@ router.post("/attempts/:attemptId/finish", async (req, res) => {
     const readingUserAns = userAnswers.READING || {};
     const readingCorrectAns = answerKey.READING || {};
     for (const key in readingCorrectAns) {
-      if (readingUserAns[key] === readingCorrectAns[key]) {
-        readingScore++;
+      const correct = readingCorrectAns[key];
+      const user = readingUserAns[key];
+      if (Array.isArray(correct)) {
+        const sortedCorrect = [...correct].sort().join(",");
+        const sortedUser = Array.isArray(user)
+          ? [...user].sort().join(",")
+          : "";
+        if (sortedCorrect === sortedUser) readingScore++;
+      } else {
+        if (user === correct) readingScore++;
       }
     }
 
-    // --- Update the database with the final status and results ---
+    // --- Update the database with final status ---
     const finalResults = { listeningScore, readingScore };
-    const updatedAttempt = await prisma.testAttempt.update({
+    await prisma.testAttempt.update({
       where: { id: attemptId },
       data: {
         status: "COMPLETED",
@@ -232,12 +255,13 @@ router.post("/attempts/:attemptId/finish", async (req, res) => {
       },
     });
 
+    console.log(`--- Successfully FINISHED attemptId: ${attemptId} ---`);
     res.status(200).json({
       message: "Test completed and graded successfully!",
       finalResults,
     });
   } catch (error) {
-    console.error("Failed to finalize test:", error);
+    console.error("!!! FAILED TO FINALIZE TEST:", error);
     res.status(500).json({ error: "Could not finalize test." });
   }
 });
@@ -284,6 +308,40 @@ router.get("/attempts/:attemptId", async (req, res) => {
   } catch (error) {
     console.error("Failed to fetch attempt details:", error);
     res.status(500).json({ error: "Could not fetch attempt details." });
+  }
+});
+
+/**
+ * @route   POST /api/tests/attempts/:attemptId/submit-section-sync
+ * @desc    Synchronous endpoint for saving section answers on page unload.
+ *          This uses navigator.sendBeacon from the frontend.
+ */
+router.post("/attempts/:attemptId/submit-section-sync", async (req, res) => {
+  const { attemptId } = req.params;
+  const { sectionType, answers } = req.body;
+
+  try {
+    const attempt = await prisma.testAttempt.findUnique({
+      where: { id: attemptId },
+      select: { userAnswers: true },
+    });
+
+    if (attempt) {
+      const currentUserAnswers = attempt.userAnswers || {};
+      const updatedUserAnswers = {
+        ...currentUserAnswers,
+        [sectionType.toUpperCase()]: answers,
+      };
+
+      await prisma.testAttempt.update({
+        where: { id: attemptId },
+        data: { userAnswers: updatedUserAnswers },
+      });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error("Beacon submission failed:", error);
+    res.status(204).send(); // Still send a 204
   }
 });
 

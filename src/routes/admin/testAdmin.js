@@ -10,9 +10,11 @@ router.use(verifyToken, isAdmin);
 
 // --- ROUTES FOR THE  TEST BUILDER ---
 
+// In: src/routes/testAdminRoutes.js
+
 /**
  * @route   POST /api/admin/tests/templates
- * @desc    Create a new "shell" Test Template for the builder wizard.
+ * @desc    Create a new "shell" Test Template with all three sections.
  * @access  Private (Admin)
  */
 router.post("/templates", async (req, res) => {
@@ -25,25 +27,23 @@ router.post("/templates", async (req, res) => {
       data: {
         title,
         description,
-        // Create empty sections that the admin will fill in later
+
         sections: {
           create: [
             {
               type: "LISTENING",
-              content: { audioUrl: "", questions: [] },
+              content: { audioUrl: "", blocks: [] }, // Use 'blocks' instead of 'questions'
               answers: {},
             },
             {
               type: "READING",
-              content: { passageText: "", questions: [] },
+              content: { passageText: "", blocks: [] },
               answers: {},
             },
             {
               type: "WRITING",
-              content: {
-                task1: { prompt: "", imageUrl: "" },
-                task2: { prompt: "" },
-              },
+
+              content: { blocks: [] },
               answers: {},
             },
           ],

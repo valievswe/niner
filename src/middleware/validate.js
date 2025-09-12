@@ -21,7 +21,6 @@ const validatePasswordMiddleware = (req, res, next) => {
     });
   }
 
-  // If validation passes, call next() to move on to the actual route handler
   next();
 };
 
